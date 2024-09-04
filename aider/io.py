@@ -1,5 +1,6 @@
 import base64
 import os
+import sys
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
@@ -196,10 +197,9 @@ class InputOutput:
         self.output = output
 
         self.pretty = pretty
-        if self.output:
-            self.pretty = False
-
         self.yes = yes
+        self.output = output if output else sys.stdout
+        self.pretty = pretty and self.output.isatty()
 
         self.input_history_file = input_history_file
         self.llm_history_file = llm_history_file
@@ -534,8 +534,9 @@ class InputOutput:
                 self.append_chat_history(hist, linebreak=True, blockquote=True)
 
         message = Text(message)
-        style = dict(style=color) if self.pretty and color else dict()
-        self.console.print(message, **style)
+        if self.pretty and color:
+            message.style = color
+        print(message, file=self.output)
 
     def tool_error(self, message="", strip=True):
         self.num_error_outputs += 1
@@ -554,14 +555,12 @@ class InputOutput:
             return
 
         messages = list(map(Text, messages))
-        style = dict()
         if self.pretty:
-            if self.tool_output_color:
-                style["color"] = self.tool_output_color
-            style["reverse"] = bold
+            style = RichStyle(color=self.tool_output_color, reverse=bold)
+            for message in messages:
+                message.style = style
 
-        style = RichStyle(**style)
-        self.console.print(*messages, style=style)
+        print(*messages, file=self.output)
 
     def append_chat_history(self, text, linebreak=False, blockquote=False, strip=True):
         if blockquote:
